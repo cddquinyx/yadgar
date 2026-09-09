@@ -99,8 +99,10 @@ Full reference: [`docs/reference/configuration.md`](docs/reference/configuration
 
 ## Dev environment tips
 
-- Python: **3.14+ required**. Use pyenv, asdf, or the Nix flake (`nix develop`) — host Python <3.14 will not install.
-- Install dev extras: `pip install -e '.[test,ml,dev]'` after `python -m venv .venv && . .venv/bin/activate`.
+- Python: **3.14+ required** — host Python <3.14 will not install. `.python-version` pins 3.14 and `[tool.uv] python-preference = "only-managed"` (pyproject.toml) makes uv download its own CPython rather than use the host's.
+- Bootstrap: `./scripts/setup-dev.sh` builds `./.venv` with `[test,ml,dev]` and installs the pre-commit hooks. Rerun with `--recreate` to start over.
+- Non-Python tools (surreal 3.1.5, systemd-run, podman, node, gitleaks, shellcheck, ...): `shell.nix` is the single dev shell. Enter it with direnv (`direnv allow`, the `.envrc` does `use flake`), `nix develop`, or `nix-shell`; `nix develop .#lite` skips the heavy chromium/podman/node closure. It puts `./.venv/bin` first on PATH.
+- On NixOS do **not** build the venv on the nix `python314`: nix-ld only serves non-nix binaries, so a nix interpreter in `.venv` cannot `import torch` from a Claude Code hook, systemd unit or cron entry that runs outside the dev shell. A uv-managed CPython works everywhere. Escape hatch: `UV_PYTHON_PREFERENCE=system`.
 - Optional extras: `[test]` (pytest, hypothesis), `[ml]` (sentence-transformers, torch), `[dev]` (ruff). `[analytics]` for DuckDB export.
 - Run the daemon against the working tree without reinstalling: `python -m yadgar daemon start --foreground` (or use the systemd user units after `make setup`).
 - Daemon control: `yadgar daemon {start|stop|restart|status}`. Logs: `journalctl --user -u yadgar.service -f` (Linux) or `~/Library/Logs/yadgar/` (macOS).

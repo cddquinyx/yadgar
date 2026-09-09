@@ -181,9 +181,12 @@
           default = self.apps.${system}.yadgar;
         };
 
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ python pkgs.uv pkgs.git ];
-        };
+        # The dev shell is defined ONCE, in ./shell.nix, and imported here so
+        # `nix develop`, `.envrc`'s `use flake` and a bare `nix-shell` all get
+        # the same package set (shell.nix reads this flake's lock for the bare
+        # route). `lite` drops the heavy e2e closure — see `full` in shell.nix.
+        devShells.default = import ./shell.nix { inherit pkgs; };
+        devShells.lite = import ./shell.nix { inherit pkgs; full = false; };
       }
     ) // {
       # NixOS module — system-level yadgar package install only.

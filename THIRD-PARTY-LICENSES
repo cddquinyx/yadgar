@@ -58,6 +58,15 @@ openfantasy/yadgar          Dockerfile        (none — apt only)
 openfantasy/yadgar-backend  Dockerfile.backend surrealdb 3.1.5
 openfantasy/yadgar-ci       Dockerfile.ci     surrealdb 3.1.5, gitleaks 8.30.1
 openfantasy/yadgar-ci-viz   Dockerfile.ci-viz (inherits from yadgar-ci)
+(no image — local dev shell) shell.nix        surrealdb 3.1.5
+
+The shell.nix row is not an image: it is the same v3.1.5 release tarball
+Dockerfile.ci fetches, unpacked into the developer's nix store by the dev shell
+so `make e2e` / `make eval` run against the surreal the SurrealQL is written
+for. It is never distributed. scripts/check_third_party_licenses.py does not
+scan it (Dockerfile* only); scripts/check_versions.py keeps its version and
+x86_64-linux digest equal to Dockerfile.ci's, so this row cannot drift from the
+yadgar-ci row above without a commit failing.
 
 
 ================================================================================

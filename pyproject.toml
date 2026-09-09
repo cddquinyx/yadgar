@@ -84,6 +84,17 @@ Homepage = "https://github.com/m-agahi/yadgar"
 Repository = "https://github.com/m-agahi/yadgar"
 Issues = "https://github.com/m-agahi/yadgar/issues"
 
+[tool.uv]
+# only-managed: ./.venv and every `uv run` must sit on a uv-downloaded CPython,
+# never the host/nix interpreter. On NixOS a nix python in the venv cannot
+# dlopen libstdc++ outside the dev shell (nix-ld only serves non-nix binaries),
+# which silently kills the Claude Code hooks, systemd units and cron entries
+# that run .venv/bin/python3 directly. Kept here rather than in the nix
+# shellHook so a hook, cron job or CI step sees the same policy as the shell.
+# CI's `uv pip install --system` is unaffected: --system overrides this.
+# Escape hatch: UV_PYTHON_PREFERENCE=system (env beats pyproject).
+python-preference = "only-managed"
+
 [tool.hatch.build.targets.wheel]
 packages = ["yadgar"]
 
