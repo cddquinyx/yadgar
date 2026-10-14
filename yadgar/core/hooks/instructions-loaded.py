@@ -41,6 +41,7 @@ except ImportError:
     import urllib.error
     import urllib.parse
     import urllib.request
+    from pathlib import Path
 
     try:
         from yadgar._shared.observability.observe import observe
@@ -61,6 +62,16 @@ except ImportError:
             return {"Authorization": f"Bearer {_AUTH_TOKEN}"}
         return {}
 
+    def _hooks_disabled(cwd):
+        # Inline twin of yadgar.core.hooks._optout.hooks_disabled (stdlib-only).
+        start = cwd or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+        try:
+            path = Path(start).expanduser().resolve()
+            return any((d / ".yadgar-disabled").exists() for d in (path, *path.parents))
+        # ValueError: a NUL byte in the path.
+        except (OSError, RuntimeError, ValueError):  # fmt: skip
+            return False
+
     @observe(
         exempt="portability inline fallback duplicate — runs only when yadgar package unimportable; primary path is the underscore module"
     )
@@ -68,6 +79,10 @@ except ImportError:
         try:
             data = json.loads(sys.stdin.read() or "{}")
         except (OSError, ValueError):  # fmt: skip
+            return
+
+        # Per-directory opt-out (`.yadgar-disabled` in cwd or an ancestor).
+        if _hooks_disabled(str(data.get("cwd", "") or "")):
             return
 
         load_reason = data.get("load_reason", "")

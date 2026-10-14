@@ -36,6 +36,7 @@ import urllib.request
 
 from yadgar._shared.observability.observe import observe
 from yadgar._shared.observability.tracing import shutdown_tracing
+from yadgar.core.hooks._optout import hooks_disabled
 from yadgar.core.install.auth_token import resolve_auth_token
 
 _PORT = os.environ.get("YADGAR_PORT", "8765")
@@ -106,6 +107,10 @@ def main() -> None:
         try:
             data = json.loads(sys.stdin.read() or "{}")
         except (OSError, ValueError):  # fmt: skip
+            return
+
+        # Per-directory opt-out (`.yadgar-disabled` in cwd or an ancestor).
+        if hooks_disabled(str(data.get("cwd", "") or "")):
             return
 
         if not _should_fire(data):

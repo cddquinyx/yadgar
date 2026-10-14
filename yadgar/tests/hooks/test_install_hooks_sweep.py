@@ -170,6 +170,10 @@ _IMPORTED_ONLY = {
     # session-start-context.py. Same shape as _identity_mint.py — a library
     # module with no main(), never copied to hooks_dir as an executable hook.
     "task_seed.py",
+    # Per-directory opt-out helper (`.yadgar-disabled` marker). Imported by
+    # the hyphen dispatchers, the underscore modules and core/cli/hook.py;
+    # same shape as _identity_mint.py — a library module with no main().
+    "_optout.py",
 }
 
 # #64: hook_runner-dispatched core hooks. These are executed via

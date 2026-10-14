@@ -87,6 +87,7 @@ from pathlib import Path
 
 import yadgar._shared.paths as _paths
 from yadgar._shared.observability.observe import observe
+from yadgar.core.hooks._optout import hooks_disabled
 
 try:
     from yadgar.core.hooks._identity_mint import resolve_session_project
@@ -115,6 +116,12 @@ except (OSError, ValueError):  # fmt: skip
     data = {}
 
 cwd = data.get("cwd", os.getcwd())
+
+# Per-directory opt-out (`.yadgar-disabled` in cwd or an ancestor): no sentinel
+# is written and nothing reaches the daemon.
+if hooks_disabled(cwd):
+    sys.exit(0)
+
 transcript_path = data.get("transcript_path", "")
 end_reason = data.get("end_reason", "other")
 session_id = data.get("session_id", "unknown")
