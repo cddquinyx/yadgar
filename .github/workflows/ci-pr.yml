@@ -153,6 +153,24 @@ jobs:
       HF_HUB_DISABLE_XET: '1'
       HF_HOME: ${{ vars.HF_HOME }}
       YADGAR_OTLP_ENDPOINT: ''
+      # Trust the checkout for every git the TESTS spawn, via environment-
+      # provided config rather than a config file. On a GitHub-hosted runner
+      # the checkout is owned by the runner user while this container runs as
+      # root, so git refuses the repo as dubiously owned (exit 128 / empty
+      # output). The "Trust workspace" step's --global entry does not reach
+      # the tests: the session redirects HOME (yadgar/tests/conftest.py,
+      # hook-install isolation), and a --system entry does not reach them
+      # either, because `_git_safe_env()` (yadgar/_shared/server_helpers)
+      # deliberately sets GIT_CONFIG_NOSYSTEM + GIT_CONFIG_GLOBAL=/dev/null
+      # (H-10 hardening) — that resolver fell back to the input directory and
+      # test_resolved_directory_for_actual_repo failed on run 38596600243
+      # after --system had fixed the other four groups. GIT_CONFIG_COUNT /
+      # KEY_0 / VALUE_0 are read regardless of those switches and survive the
+      # `{**os.environ, ...}` spread. A self-hosted runner whose UIDs match
+      # never needs any of this.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: '*'
     strategy:
       # fail-fast: false — a failure in one group must not cancel its siblings.
       # Cancelling destroys the information the split exists to produce: which
@@ -197,17 +215,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Trust workspace (container runs as a different UID than checkout)
-        # --system as well as --global: the test session redirects HOME to a tmp
-        # dir (yadgar/tests/conftest.py, hook-install isolation), so the --global
-        # entry is invisible to any git the tests spawn. On a GitHub-hosted
-        # runner the checkout is owned by the runner user while this container
-        # runs as root, and `git ls-files` in test_check_staged_parses.py then
-        # dies with "dubious ownership" (exit 128). /etc/gitconfig is read
-        # regardless of HOME. A self-hosted runner whose UIDs match never hits
-        # this, which is why the --global line alone was enough before.
-        run: |
-          git config --global --add safe.directory '*'
-          git config --system --add safe.directory '*'
+        # Covers git run from the steps below. Git run FROM THE TESTS is covered
+        # by the GIT_CONFIG_* job env above — see the comment there for why a
+        # config-file entry (global or system) cannot reach it.
+        run: git config --global --add safe.directory '*'
 
       - name: Cache pip
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
