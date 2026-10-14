@@ -17,9 +17,9 @@ yadgar/_shared/embeddings/remote_embeddings.py:39:physically under yadgar/_share
 yadgar/_shared/storage/dbsize.py:61:physically under yadgar/_shared/ — same layering + container-guaranteed-env reasoning as remote_embeddings.py.
 
 # --- category 3: portability fallback branches — importing the resolver would defeat their own purpose ---
-yadgar/core/hooks/subagent-start.py:53:except-ImportError standalone fallback that exists specifically to keep the hook functional when the yadgar package is NOT importable from this interpreter; the primary path (yadgar.core.hooks.subagent_start.main) already routes through resolve_auth_token().
-yadgar/core/hooks/instructions-loaded.py:53:same as above for the InstructionsLoaded hook's standalone fallback; primary path (yadgar.core.hooks.instructions_loaded.main) already routes through resolve_auth_token().
-yadgar/core/hooks/file-changed.py:57:same as above for the FileChanged hook's standalone fallback; primary path (yadgar.core.hooks.file_changed.main) already routes through resolve_auth_token().
+yadgar/core/hooks/subagent-start.py:54:except-ImportError standalone fallback that exists specifically to keep the hook functional when the yadgar package is NOT importable from this interpreter; the primary path (yadgar.core.hooks.subagent_start.main) already routes through resolve_auth_token().
+yadgar/core/hooks/instructions-loaded.py:54:same as above for the InstructionsLoaded hook's standalone fallback; primary path (yadgar.core.hooks.instructions_loaded.main) already routes through resolve_auth_token().
+yadgar/core/hooks/file-changed.py:58:same as above for the FileChanged hook's standalone fallback; primary path (yadgar.core.hooks.file_changed.main) already routes through resolve_auth_token().
 yadgar/core/hooks/session-start-context.py:105:same portability pattern as the three fallbacks above, inline rather than a separate entry-point/module split — guarded by `resolve_auth_token is not None` (set to None on ImportError) so it degrades to the bare env read only when yadgar itself is not importable.
 
 # --- category 4: different purpose entirely — must read the literal env var, not the resolved value ---

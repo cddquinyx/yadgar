@@ -657,6 +657,10 @@ def _decide_edit_family(data: dict) -> dict:
 
 @observe(tier="boundary")
 def main() -> None:
+    # Deliberately does NOT honour the `.yadgar-disabled` per-directory opt-out
+    # (yadgar/core/hooks/_optout.py): the guards exist to stop the agent
+    # bypassing hard rules, and a marker file the agent can create must not be
+    # able to switch them off — the same reasoning as G5 (hook_config_tamper).
     try:
         try:
             data = json.load(sys.stdin)

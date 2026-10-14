@@ -8,3 +8,8 @@ These run OUTSIDE the daemon as short-lived host processes — keep them
 stdlib-only, fast (latency budgets are tested), and talking to the daemon
 over HTTP only. They are packaged as assets; changing filenames breaks
 `install_hooks_lib` expectations and existing installs.
+
+Every memory/context hook honours the per-directory opt-out in `_optout.py`
+(a `.yadgar-disabled` marker in the session cwd or any ancestor → exit
+silently, no daemon call). `pretooluse-router.py` deliberately does not — see
+its `main()`.

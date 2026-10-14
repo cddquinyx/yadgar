@@ -16,8 +16,8 @@ Run: `make e2e` (local, real `surreal`) + pre-push hook; **excluded from CI**
 (`-m 'not e2e'`).
 
 **Surface (recounted v6 T6, self-enforced by `scripts/check_contract_coverage.py`):**
-**259 SHALLs / 41 subsystems.** Today: **57 ✅ · 197 ⏳ · 1 ❌.** (+ 2 🗑 RETIRED — BC-CM2/CM3, v5.71.0 #47; + 1 🗑 DELETED — BC-T2 remember tool, v6 T3; + 4 🗑 DELETED — BC-G5/T36/T37/T38 wiki-draft tools, v5.157.0 #76; + 2 🗑 DELETED — BC-T56/T58 container-blind repo-wiki/coverage tools, v5.160.0 #83; + 3 🗑 DELETED — BC-G3 §25 branch resolution and BC-G8/T57 branch-cleanup tool, v5.180.0 ADR-0215) Of the 197 ⏳:
-**58 `[r]` (real-path coverage exists) · 107 `[u]` (unit-only) · 32 none.**
+**260 SHALLs / 41 subsystems.** Today: **57 ✅ · 198 ⏳ · 1 ❌.** (+ 2 🗑 RETIRED — BC-CM2/CM3, v5.71.0 #47; + 1 🗑 DELETED — BC-T2 remember tool, v6 T3; + 4 🗑 DELETED — BC-G5/T36/T37/T38 wiki-draft tools, v5.157.0 #76; + 2 🗑 DELETED — BC-T56/T58 container-blind repo-wiki/coverage tools, v5.160.0 #83; + 3 🗑 DELETED — BC-G3 §25 branch resolution and BC-G8/T57 branch-cleanup tool, v5.180.0 ADR-0215) Of the 197 ⏳:
+**58 `[r]` (real-path coverage exists) · 108 `[u]` (unit-only) · 32 none.**
 Goal: every SHALL → ✅ or ❌.
 
 **Lint rules** (`scripts/check_contract_coverage.py`, run as a non-e2e pytest):
@@ -109,6 +109,7 @@ Telemetry caveat: `consolidation_log` vacuum rows written before task:0045 carry
 - BC-H1 tool-usage capture hook stamps caller cwd. ⏳[u] P2
 - BC-H2 subagent-stop/session-end hook stamps caller cwd. ⏳[u] P2
 - BC-H3 prompt-recall injected context is directory-scoped (no other-project leak). ⏳[r] P1
+- BC-H4 a `.yadgar-disabled` marker in the session cwd or any ancestor SHALL make every memory/context hook (the six dispatched events, Stop, SessionEnd, FileChanged, InstructionsLoaded, SubagentStart) exit silently before any daemon call or record write; the PreToolUse router guards SHALL stay live under the marker. ⏳[u] `yadgar/tests/hooks/test_hook_directory_opt_out.py::test_dispatch_opt_out_covers_every_event` P1
 
 ### S. Rules / secret gate
 - BC-S1 secret patterns blocked at API + storage. ⏳[r] P1
