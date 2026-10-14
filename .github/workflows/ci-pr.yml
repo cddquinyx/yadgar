@@ -768,7 +768,27 @@ jobs:
         # stop/start; xdist workers would race the same container.
         run: |
           set -o pipefail
-          uv run --python 3.14 --extra sql --extra test python -m pytest \
+          # This suite assumes EITHER the test process is root OR the container
+          # daemon is rootless: the fixture starts the backend with `--user root`
+          # (yadgar/tests/integration/conftest.py) and the phase-3 side build
+          # does the same by contract (yadgar/core/vacuum/launcher.py,
+          # test_vacuum_side_launcher.py). Under a rootless daemon that root maps
+          # back to the calling user; under a ROOTFUL daemon it is real root, so
+          # SurrealKV's files land root-owned and a non-root test process dies in
+          # phase 2 with `Permission denied: .../surreal_db/wal` (measured on
+          # ubuntu-latest, run 38594547927). The self-hosted runner never saw it
+          # because its job already runs as root inside the runner container.
+          # Restore that precondition here rather than loosen a production
+          # contract for one runner: run the suite as root when we are not.
+          # `-E` keeps HOME and the GITHUB_ENV exports (image tag, runtime pin);
+          # `env PATH=...` carries uv past sudo's secure_path. The GitHub
+          # runner's sudoers grants ALL, which implies SETENV, so -E is allowed.
+          if [ "$(id -u)" -eq 0 ]; then
+            as_root=""
+          else
+            as_root="sudo -E env PATH=$PATH"
+          fi
+          $as_root uv run --python 3.14 --extra sql --extra test python -m pytest \
             yadgar/tests/integration/test_vacuum_e2e.py \
             yadgar/tests/integration/test_conftest_backend_pin.py \
             -o addopts='-n 0' \
