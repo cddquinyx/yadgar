@@ -30,6 +30,7 @@ import yadgar._shared.paths as _paths
 from yadgar._shared.config import get_settings
 from yadgar._shared.observability.observe import observe
 from yadgar._shared.observability.tracing import shutdown_tracing
+from yadgar.core.hooks._optout import hooks_disabled
 
 INTERVAL = 25  # human messages between checkpoints
 
@@ -312,6 +313,12 @@ def main() -> None:
             "1",
             "yes",
         )
+
+        # Per-directory opt-out (`.yadgar-disabled` in cwd or an ancestor) — allow
+        # stop with no checkpoint prompt, before any transcript read or daemon call.
+        if hooks_disabled(cwd):
+            print("{}")
+            return
 
         # Infinite-loop guard: Claude already ran maintenance this turn — allow stop
         if stop_hook_active:

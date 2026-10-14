@@ -462,6 +462,10 @@ To opt your subagents into the protocol, paste [`docs/reference/claude-subagent-
 
 The **agent-prompt library** (`agent_prompt_save` / `agent_dispatch_prelude`) gives subagent dispatch prompts a versioned home: save a good prompt once, improve it over time, and every dispatch pulls the latest version automatically. `agent_dispatch_prelude(pattern, task_topic)` builds a compliant prelude (recall-first contract + `## Yadgar findings` footer) from the stored pattern.
 
+## Keeping one directory out of memory
+
+Drop an empty file named `.yadgar-disabled` at the root of a project (or any ancestor directory) and every memory/context hook exits silently for sessions started anywhere beneath it — nothing injected, nothing captured, no sentinel written, the daemon never contacted. Prefer this over Claude Code's `disableAllHooks`, which also switches off the status line and every hook from other tools. The PreToolUse router's hard-rule guards deliberately ignore the marker (a file the agent can create must not be able to switch them off); use `disabled_guards` in `~/.claude/yadgar-hook-exceptions.json` for those. Details: [`docs/reference/hooks.md`](docs/reference/hooks.md#per-directory-opt-out-v51950).
+
 ---
 
 ## Benchmark

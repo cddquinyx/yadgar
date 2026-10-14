@@ -190,6 +190,44 @@ handle the team_inbox and docs/PLAN_* filtering.
 
 ---
 
+## Per-directory opt-out (v5.195.0)
+
+Create an empty file named `.yadgar-disabled` at the root of a project, or in
+any ancestor directory, and every memory/context hook exits silently for
+sessions started anywhere under it: nothing is injected, nothing is captured,
+no session-end sentinel is written, and the daemon is never contacted. The
+check (`yadgar/core/hooks/_optout.py::hooks_disabled`) reads the hook
+payload's `cwd` — falling back to `CLAUDE_PROJECT_DIR`, then the process cwd —
+and walks every ancestor, so one marker covers a whole tree. A directory that
+cannot be resolved is treated as NOT opted out: the marker is an explicit
+choice, never a default.
+
+Covered:
+
+- the six `hook_runner.py` / `yadgar hook <event>` events (`post-tool-capture`,
+  `session-start-context`, `post-compact-rehydrate`, `pre-compact-drain`,
+  `prompt-recall`, `block-reflect`) — checked once in `dispatch`, before the
+  handler runs;
+- `yadgar-stop-memory-checkpoint.py` (allows the stop, no checkpoint prompt);
+- `yadgar-session-end-capture.py`, `yadgar-file-changed.py`,
+  `yadgar-instructions-loaded.py`, `yadgar-subagent-start.py` — including the
+  inline fallbacks that run when the `yadgar` package is not importable.
+
+Not covered, on purpose: `yadgar-pretooluse-router.py`. Its guards (db
+lockdown, hook-config tamper, git-commit bypass, terraform family, push to
+default branch) exist to stop the agent bypassing hard rules, and a file the
+agent can create must not be able to switch them off — the same reasoning as
+the router's own G5 guard. Disable individual guards through `disabled_guards`
+in `~/.claude/yadgar-hook-exceptions.json` instead.
+
+Why not Claude Code's `disableAllHooks`? The settings schema documents it as
+"Disable all hooks and statusLine execution": it takes the status line and
+every non-yadgar hook down with it. The marker only affects yadgar.
+
+Why a file and not a runtime-config row (ADR-0163, as `code_graph.enabled`
+is)? The hooks must decide before any daemon round trip, and the opt-out
+exists precisely so the daemon never sees the tree.
+
 ## Environment variables
 
 | Variable | Default | Purpose |

@@ -32,6 +32,7 @@ PreToolUse guard is the standalone router, and Stop lives in
 from __future__ import annotations
 
 import contextlib
+import io
 import json
 import os
 import sys
@@ -39,6 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from yadgar.core.hooks._optout import hooks_disabled
 from yadgar.core.install.auth_token import resolve_auth_token
 
 _PORT = os.environ.get("YADGAR_PORT", "8765")
@@ -538,8 +540,32 @@ def dispatch(hook_type: str) -> int:
         print(f"Unknown hook type: {hook_type!r}", file=sys.stderr)
         print(f"Available: {', '.join(_HOOKS)}", file=sys.stderr)
         return 1
+    if _payload_opted_out():
+        return 0
     handler()
     return 0
+
+
+def _payload_opted_out() -> bool:
+    """Peek at the stdin payload's ``cwd`` for the ``.yadgar-disabled`` marker.
+
+    The ONE place the six dispatched events check the per-directory opt-out,
+    so no handler needs to. Each handler parses stdin itself, so the payload
+    is read here once and handed back on a fresh ``sys.stdin``; if stdin
+    cannot be read it is left untouched and the handler sees exactly what it
+    would have seen without this check. A payload with no ``cwd`` falls back
+    to ``CLAUDE_PROJECT_DIR`` / the process cwd inside ``hooks_disabled``.
+    """
+    try:
+        raw = sys.stdin.read()
+    except (AttributeError, OSError, ValueError):  # fmt: skip
+        return False
+    sys.stdin = io.StringIO(raw)
+    try:
+        cwd = json.loads(raw).get("cwd", "")
+    except (AttributeError, ValueError):  # fmt: skip
+        cwd = ""
+    return hooks_disabled(cwd if isinstance(cwd, str) else "")
 
 
 def cmd_hook(args) -> None:
