@@ -153,6 +153,24 @@ jobs:
       HF_HUB_DISABLE_XET: '1'
       HF_HOME: ${{ vars.HF_HOME }}
       YADGAR_OTLP_ENDPOINT: ''
+      # Trust the checkout for every git the TESTS spawn, via environment-
+      # provided config rather than a config file. On a GitHub-hosted runner
+      # the checkout is owned by the runner user while this container runs as
+      # root, so git refuses the repo as dubiously owned (exit 128 / empty
+      # output). The "Trust workspace" step's --global entry does not reach
+      # the tests: the session redirects HOME (yadgar/tests/conftest.py,
+      # hook-install isolation), and a --system entry does not reach them
+      # either, because `_git_safe_env()` (yadgar/_shared/server_helpers)
+      # deliberately sets GIT_CONFIG_NOSYSTEM + GIT_CONFIG_GLOBAL=/dev/null
+      # (H-10 hardening) — that resolver fell back to the input directory and
+      # test_resolved_directory_for_actual_repo failed on run 38596600243
+      # after --system had fixed the other four groups. GIT_CONFIG_COUNT /
+      # KEY_0 / VALUE_0 are read regardless of those switches and survive the
+      # `{**os.environ, ...}` spread. A self-hosted runner whose UIDs match
+      # never needs any of this.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: '*'
     strategy:
       # fail-fast: false — a failure in one group must not cancel its siblings.
       # Cancelling destroys the information the split exists to produce: which
@@ -197,6 +215,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Trust workspace (container runs as a different UID than checkout)
+        # Covers git run from the steps below. Git run FROM THE TESTS is covered
+        # by the GIT_CONFIG_* job env above — see the comment there for why a
+        # config-file entry (global or system) cannot reach it.
         run: git config --global --add safe.directory '*'
 
       - name: Cache pip
@@ -681,6 +702,23 @@ jobs:
         # the same mount, so proving the root is enough.
         run: |
           set -euo pipefail
+          # LAYER 6: pin the container runtime to docker — BEFORE the dind
+          # branch below, because it applies on every runner, not only the
+          # sidecar one. `_get_runtime()` (yadgar/core/daemon/runtime.py) probes
+          # `podman --version` FIRST and returns podman when it answers 0. On
+          # the self-hosted runner podman IS on PATH and answers --version fine,
+          # but cannot DO anything — nested rootless podman fails "cannot
+          # re-exec process" (car G5, confirmed live). On a GitHub-hosted
+          # ubuntu runner podman is installed AND works, which is worse: the
+          # backend image was pulled with `docker pull` above, so
+          # `backend_image_present()` ran `podman image inspect` against a
+          # store that does not hold it, answered no, and phase 3 SKIPped with
+          # "no usable surreal" even though the image was pullable. The
+          # fixture (yadgar/tests/integration/conftest.py) picks docker first;
+          # the vacuum has to use the same runtime or it cannot see the
+          # container the fixture started. Measured 2026-10-14 on
+          # ubuntu-latest: run 38585947003.
+          echo "YADGAR_CONTAINER_RUNTIME=docker" >> "$GITHUB_ENV"
           case "${DOCKER_HOST:-}" in
             tcp://*)
               hostport=${DOCKER_HOST#tcp://}
@@ -715,17 +753,6 @@ jobs:
           echo "workspace is dind-visible at $shared_root; side-build host is $side_host"
           echo "YADGAR_TEST_SHARED_DATA_ROOT=$shared_root" >> "$GITHUB_ENV"
           echo "YADGAR_VACUUM_SIDE_HOST=$side_host" >> "$GITHUB_ENV"
-          # LAYER 6: pin the container runtime to docker. `_get_runtime()`
-          # (yadgar/core/daemon/runtime.py) probes `podman --version` FIRST and
-          # returns podman when it answers 0. On this runner podman IS on PATH
-          # and answers --version fine, but cannot DO anything — nested rootless
-          # podman fails "cannot re-exec process" (car G5, confirmed live). So
-          # `backend_image_present()` ran `podman image inspect` against a store
-          # that is not the one dind uses, answered no, and phase 3 SKIPped with
-          # "no usable surreal" even though the image was pullable. That is the
-          # presence-not-function trap this job's own header warns about; the
-          # test fixtures probe FUNCTION and pick docker, the vacuum code did not.
-          echo "YADGAR_CONTAINER_RUNTIME=docker" >> "$GITHUB_ENV"
 
       - name: Run the vacuum e2e integration suite (task 156 / car A3)
         # yadgar/tests/integration/test_vacuum_e2e.py and
@@ -752,7 +779,27 @@ jobs:
         # stop/start; xdist workers would race the same container.
         run: |
           set -o pipefail
-          uv run --python 3.14 --extra sql --extra test python -m pytest \
+          # This suite assumes EITHER the test process is root OR the container
+          # daemon is rootless: the fixture starts the backend with `--user root`
+          # (yadgar/tests/integration/conftest.py) and the phase-3 side build
+          # does the same by contract (yadgar/core/vacuum/launcher.py,
+          # test_vacuum_side_launcher.py). Under a rootless daemon that root maps
+          # back to the calling user; under a ROOTFUL daemon it is real root, so
+          # SurrealKV's files land root-owned and a non-root test process dies in
+          # phase 2 with `Permission denied: .../surreal_db/wal` (measured on
+          # ubuntu-latest, run 38594547927). The self-hosted runner never saw it
+          # because its job already runs as root inside the runner container.
+          # Restore that precondition here rather than loosen a production
+          # contract for one runner: run the suite as root when we are not.
+          # `-E` keeps HOME and the GITHUB_ENV exports (image tag, runtime pin);
+          # `env PATH=...` carries uv past sudo's secure_path. The GitHub
+          # runner's sudoers grants ALL, which implies SETENV, so -E is allowed.
+          if [ "$(id -u)" -eq 0 ]; then
+            as_root=""
+          else
+            as_root="sudo -E env PATH=$PATH"
+          fi
+          $as_root uv run --python 3.14 --extra sql --extra test python -m pytest \
             yadgar/tests/integration/test_vacuum_e2e.py \
             yadgar/tests/integration/test_conftest_backend_pin.py \
             -o addopts='-n 0' \

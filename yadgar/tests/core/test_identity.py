@@ -250,11 +250,30 @@ def test_trailing_separator_does_not_resurrect_the_basename_key(tmp_path):
 # ── top-level composition: mint_project_id (was derive_project_id) ────────
 
 
+def _owner_repo_of_origin(cwd: str) -> str:
+    """``owner/repo`` of this checkout's live ``origin``, read independently of
+    the code under test so the expectation tracks the checkout, not a
+    literal. A fork's origin is ``<fork-owner>/yadgar``; pinning the upstream
+    owner here would make the test fail on every fork for a reason that has
+    nothing to do with identity minting (measured on cddquinyx/yadgar, CI run
+    38596600243). Handles ``git@host:owner/repo.git``, ``ssh://host/owner/repo``
+    and ``https://host/owner/repo[.git]``.
+    """
+    url = (
+        subprocess.check_output(["git", "-C", cwd, "config", "remote.origin.url"]).decode().strip()
+    )
+    tail = url.rstrip("/").removesuffix(".git")
+    if "://" not in tail and ":" in tail:
+        tail = tail.split(":", 1)[1]
+    return "/".join(tail.split("/")[-2:])
+
+
 def test_derive_project_id_returns_owner_repo_for_this_repo(monkeypatch):
-    """The live origin remote in this checkout carries the owner/repo
-    ``m-agahi/yadgar``; after insteadOf resolution + normalisation (scheme+host
-    stripped, ``.git`` suffix dropped) the project_id collapses to
-    ``m-agahi/yadgar``.
+    """The live origin remote in this checkout carries an ``owner/repo``
+    (``m-agahi/yadgar`` upstream, ``<fork-owner>/yadgar`` on a fork); after
+    insteadOf resolution + normalisation (scheme+host stripped, ``.git`` suffix
+    dropped) the project_id collapses to exactly that ``owner/repo``, which the
+    test derives from the same remote rather than pinning.
 
     The exact ``remote_url`` string is intentionally NOT asserted here — it
     tracks the live remote format (SSH alias ``git@github-personal:`` /
@@ -271,16 +290,16 @@ def test_derive_project_id_returns_owner_repo_for_this_repo(monkeypatch):
     function that now produces it.
     """
     cwd = os.getcwd()
+    expected = _owner_repo_of_origin(cwd)
+    assert expected.count("/") == 1 and "yadgar" in expected, expected
     project_id = mint_project_id(cwd)
 
-    assert project_id == "m-agahi/yadgar"
+    assert project_id == expected
     # The remote must be a non-empty string carrying the repo path so the
     # provenance echo never silently disappears.
     remote_url = identity._origin_remote(_resolve_project_root(cwd))
     assert remote_url, f"remote_url must be non-empty for a git checkout, got {remote_url!r}"
-    assert "m-agahi/yadgar" in remote_url, (
-        f"remote_url must carry the owner/repo path, got {remote_url!r}"
-    )
+    assert expected in remote_url, f"remote_url must carry the owner/repo path, got {remote_url!r}"
 
 
 def test_derive_project_id_uses_project_id_file_override(tmp_path, monkeypatch):
