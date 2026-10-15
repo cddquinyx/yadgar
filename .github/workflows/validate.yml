@@ -33,7 +33,12 @@ jobs:
     # weights + gitleaks v8.30.1 baked in. So this job only needs to
     # pip install the Python tooling (pre-commit + uv + import-linter)
     # and editable-install yadgar itself.
-    runs-on: [self-hosted, linux, x64, yadgar]
+    # Same runner dial as ci-pr.yml: a repo VARIABLE with the self-hosted
+    # labels as the default, so a fork (or a box without the self-hosted
+    # runner) can point this at ubuntu-latest without a workflow edit. Left
+    # hardcoded, this job queued forever on a fork while CI (PR) ran — and a
+    # PR check that never completes reads as "pending" indefinitely.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","linux","x64","yadgar"]') }}
     container:
       image: docker.io/openfantasy/yadgar-ci:${{ vars.YADGAR_VERSION }}
     steps:
