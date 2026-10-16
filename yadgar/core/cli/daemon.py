@@ -78,11 +78,20 @@ def _handle_start(daemon, daemon_cls, dev: bool) -> None:
 
 
 def _handle_stop(daemon, dev: bool) -> None:
+    # stop() reports one outcome per container under "core" and "backend":
+    # "stopped", "not_running", or the runtime's stderr when `<rt> stop` failed.
     result = daemon.stop(dev=dev)
-    if result["status"] == "stopped":
-        print(f"Yadgar daemon stopped (container: {result['container']})")
+    outcomes = {name: result.get(name, "not_running") for name in ("core", "backend")}
+    if set(outcomes.values()) == {"not_running"}:
+        print("Yadgar daemon is not running.")
         return
-    print("Yadgar daemon is not running.")
+    failed = {n: o for n, o in outcomes.items() if o not in ("stopped", "not_running")}
+    if failed:
+        for name, reason in failed.items():
+            print(f"Failed to stop {name}: {reason}", file=sys.stderr)
+        sys.exit(1)
+    summary = ", ".join(f"{n}: {o.replace('_', ' ')}" for n, o in outcomes.items())
+    print(f"Yadgar daemon stopped ({summary})")
 
 
 def _handle_graceful_stop(args, daemon_cls, dev: bool, port: int) -> None:
