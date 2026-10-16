@@ -191,14 +191,14 @@ def _run_update_check() -> None:
     """
     try:
         from yadgar import __version__  # noqa: PLC0415
-        from yadgar.core.update.check import probe_latest_version  # noqa: PLC0415
+        from yadgar.core.update.check import is_newer, probe_latest_version  # noqa: PLC0415
 
         _settings = settings  # module-level singleton
         result = probe_latest_version(
             url=_settings.UPDATE_PYPI_URL,
             timeout=_settings.UPDATE_CHECK_TIMEOUT_SECONDS,
         )
-        if result.available_version != __version__:
+        if is_newer(result.available_version, __version__):
             logger.warning(
                 "yadgar update available: %s → %s  |  run: %s",
                 __version__,

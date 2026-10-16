@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "yadgar"
-version = "5.195.1"
+version = "5.195.2"
 description = "Persistent memory engine for Claude Code — heat decay, sleep consolidation, and surprise-gated storage"
 readme = "README.md"
 license = "Apache-2.0"
@@ -221,7 +221,9 @@ ml = [
 # because asyncmy is compiled.
 sql = [
     "asyncmy>=0.2.11",
-    "sqlalchemy>=2.0",
+    # [asyncio] pulls greenlet, which SQLAlchemy 2.1 no longer installs implicitly;
+    # without it the engine-#2 migration dies with ImportError on backend start.
+    "sqlalchemy[asyncio]>=2.0",
     "alembic>=1.13",
 ]
 test = [
