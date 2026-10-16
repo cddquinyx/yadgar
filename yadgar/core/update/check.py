@@ -13,6 +13,7 @@ Corporate firewalls: respects HTTPS_PROXY env (httpx default behavior).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -23,6 +24,29 @@ from yadgar._shared.observability.observe import observe
 
 _PYPI_URL = "https://pypi.org/pypi/yadgar/json"
 _DEFAULT_TIMEOUT = 5
+_RELEASE_SEGMENT = re.compile(r"\d+(?:\.\d+)*")
+
+
+@observe(tier="hot")
+def is_newer(available: str, current: str) -> bool:
+    """Return True when *available* is a strictly later release than *current*.
+
+    Compares the numeric release segment (``5.195.1`` of ``5.195.1rc1+local``),
+    zero-padded so ``5.195`` equals ``5.195.0``. A plain inequality test used to
+    stand here, so a source checkout ahead of PyPI was told to "update" to an
+    older release. If either string has no numeric release segment, nothing is
+    claimed to be newer.
+    """
+    a = _RELEASE_SEGMENT.match(available.strip())
+    c = _RELEASE_SEGMENT.match(current.strip())
+    if a is None or c is None:
+        return False
+    av = [int(p) for p in a.group().split(".")]
+    cv = [int(p) for p in c.group().split(".")]
+    width = max(len(av), len(cv))
+    av += [0] * (width - len(av))
+    cv += [0] * (width - len(cv))
+    return av > cv
 
 
 @dataclass

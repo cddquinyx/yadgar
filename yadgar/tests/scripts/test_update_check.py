@@ -339,3 +339,100 @@ class TestCanSelfInstall:
         from yadgar.core.update.install_methods import can_self_install
 
         assert can_self_install("brew") is False
+
+
+# ---------------------------------------------------------------------------
+# check.py — is_newer, and every site that decides "update available" with it
+# ---------------------------------------------------------------------------
+
+
+class TestIsNewer:
+    """`available != current` used to decide "update available", so a source
+    checkout ahead of PyPI (5.195.1 vs 5.194.1) was offered a downgrade."""
+
+    @pytest.mark.parametrize(
+        ("available", "current", "expected"),
+        [
+            ("5.195.2", "5.195.1", True),
+            ("5.200.0", "5.195.1", True),
+            ("6.0.0", "5.195.1", True),
+            ("5.194.1", "5.195.1", False),  # the reported downgrade
+            ("5.195.1", "5.195.1", False),
+            ("5.195", "5.195.0", False),  # zero-padded, not lexicographic
+            ("5.195.10", "5.195.9", True),  # numeric, not string order
+            ("5.195.1", "0.0.0+unknown", True),  # __version__ fallback when not installed
+            ("not-a-version", "5.195.1", False),
+        ],
+    )
+    def test_is_newer(self, available, current, expected):
+        from yadgar.core.update.check import is_newer
+
+        assert is_newer(available, current) is expected
+
+
+class TestCmdCheckNeverOffersDowngrade:
+    """`yadgar update --check` output for PyPI behind, equal to, and ahead of local."""
+
+    def _run_check(self, monkeypatch, capsys, available: str) -> str:
+        import argparse
+
+        import yadgar
+        from yadgar.core.cli import update as update_cli
+        from yadgar.core.update import check as check_mod
+        from yadgar.core.update import install_methods
+        from yadgar.core.update.check import LatestVersionInfo
+
+        monkeypatch.setattr(yadgar, "__version__", "5.195.1")
+        monkeypatch.setattr(
+            check_mod,
+            "probe_latest_version",
+            lambda **_: LatestVersionInfo(available_version=available),
+        )
+        monkeypatch.setattr(install_methods, "detect_install_method", lambda: "source")
+        monkeypatch.setattr(install_methods, "upgrade_command", lambda _m: "git pull")
+        monkeypatch.setattr(install_methods, "can_self_install", lambda _m: True)
+        with pytest.raises(SystemExit) as exc_info:
+            update_cli._cmd_check(argparse.Namespace())
+        assert exc_info.value.code == 0
+        return capsys.readouterr().out
+
+    def test_pypi_behind_local_is_not_an_update(self, monkeypatch, capsys):
+        out = self._run_check(monkeypatch, capsys, "5.194.1")
+        assert "Update available" not in out
+        assert "Up to date (5.195.1; newest on PyPI is 5.194.1)" in out
+
+    def test_pypi_equal_is_up_to_date(self, monkeypatch, capsys):
+        out = self._run_check(monkeypatch, capsys, "5.195.1")
+        assert "Up to date (5.195.1)" in out
+
+    def test_pypi_ahead_is_an_update(self, monkeypatch, capsys):
+        out = self._run_check(monkeypatch, capsys, "5.196.0")
+        assert "Update available: 5.196.0" in out
+
+
+class TestDaemonAutoCheckNeverOffersDowngrade:
+    """The daemon's start-up probe logs a WARNING only for a strictly newer release."""
+
+    def _run(self, monkeypatch, caplog, available: str) -> list[str]:
+        import logging
+
+        import yadgar
+        from yadgar.core.daemon import daemons
+        from yadgar.core.update import check as check_mod
+        from yadgar.core.update.check import LatestVersionInfo
+
+        monkeypatch.setattr(yadgar, "__version__", "5.195.1")
+        monkeypatch.setattr(
+            check_mod,
+            "probe_latest_version",
+            lambda **_: LatestVersionInfo(available_version=available),
+        )
+        with caplog.at_level(logging.INFO, logger=daemons.logger.name):
+            daemons._run_update_check()
+        return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_pypi_behind_logs_no_warning(self, monkeypatch, caplog):
+        assert not any("update available" in m for m in self._run(monkeypatch, caplog, "5.194.1"))
+
+    def test_pypi_ahead_logs_warning(self, monkeypatch, caplog):
+        assert any("update available" in m for m in self._run(monkeypatch, caplog, "5.196.0"))

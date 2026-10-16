@@ -170,6 +170,44 @@ class TestControlUpdateCheckAction:
         assert body["update_available"] is True
         assert body["current_version"] == __version__
 
+    def test_action_check_update_available_false_when_pypi_is_behind(self, monkeypatch):
+        """update_available=False when PyPI is OLDER than the running version.
+
+        A plain `!=` used to report this as an update, offering a downgrade to a
+        source checkout ahead of the last release.
+        """
+        import yadgar
+
+        monkeypatch.setattr(yadgar, "__version__", "5.195.1")
+        from yadgar.core.server.routes import control_update as route_mod
+
+        monkeypatch.setattr(route_mod, "__version__", "5.195.1")
+        app = _make_update_app(monkeypatch)
+        client = TestClient(app, raise_server_exceptions=False)
+
+        mock_result = MagicMock()
+        mock_result.available_version = "5.194.1"
+        mock_result.checked_at = "2026-10-16T00:00:00Z"
+
+        with (
+            patch("yadgar.core.update.check.probe_latest_version", return_value=mock_result),
+            patch("yadgar.core.update.install_methods.detect_install_method", return_value="pipx"),
+            patch(
+                "yadgar.core.update.install_methods.upgrade_command",
+                return_value="pipx upgrade yadgar",
+            ),
+            patch("yadgar.core.update.install_methods.can_self_install", return_value=True),
+        ):
+            resp = client.post(
+                "/api/control/update",
+                json={"action": "check"},
+                headers=_auth_headers(),
+            )
+
+        body = resp.json()
+        assert body["update_available"] is False
+        assert body["current_version"] == "5.195.1"
+
     def test_release_notes_url_contains_available_version(self, monkeypatch):
         """release_notes_url includes the available_version."""
         app = _make_update_app(monkeypatch)
