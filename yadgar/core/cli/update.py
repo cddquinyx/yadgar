@@ -122,7 +122,7 @@ def _cmd_check(args: argparse.Namespace) -> None:  # noqa: ARG001
     """Probe PyPI and print upgrade command."""
     from yadgar import __version__  # noqa: PLC0415
     from yadgar.core.update import install_methods  # noqa: PLC0415
-    from yadgar.core.update.check import probe_latest_version  # noqa: PLC0415
+    from yadgar.core.update.check import is_newer, probe_latest_version  # noqa: PLC0415
 
     method = install_methods.detect_install_method()
     cmd = install_methods.upgrade_command(method)
@@ -139,13 +139,14 @@ def _cmd_check(args: argparse.Namespace) -> None:  # noqa: ARG001
         sys.exit(0)
 
     available = result.available_version
-    update_available = available != __version__
 
-    if update_available:
+    if is_newer(available, __version__):
         print(f"Update available: {available}")
         print(f"Release notes: https://pypi.org/project/yadgar/{available}/")
-    else:
+    elif available == __version__:
         print(f"Up to date ({__version__})")
+    else:
+        print(f"Up to date ({__version__}; newest on PyPI is {available})")
 
     if not can_self:
         print("Manual upgrade required:")

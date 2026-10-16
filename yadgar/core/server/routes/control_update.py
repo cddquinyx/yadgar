@@ -100,7 +100,7 @@ async def control_update_handler(request: Request) -> JSONResponse:
     cmd = install_methods.upgrade_command(method)
 
     # Probe PyPI
-    from yadgar.core.update.check import probe_latest_version  # noqa: PLC0415
+    from yadgar.core.update.check import is_newer, probe_latest_version  # noqa: PLC0415
 
     try:
         from yadgar._shared.config import get_settings  # noqa: PLC0415
@@ -129,7 +129,7 @@ async def control_update_handler(request: Request) -> JSONResponse:
             status_code=503,
         )
 
-    update_available = result.available_version != __version__
+    update_available = is_newer(result.available_version, __version__)
     release_notes_url = f"https://pypi.org/project/yadgar/{result.available_version}/"
 
     return JSONResponse(
