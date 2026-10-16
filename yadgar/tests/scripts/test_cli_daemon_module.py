@@ -206,25 +206,59 @@ class TestStart:
 
 
 class TestStop:
-    def test_stop_success(self, capsys):
+    """Mocks return the shape YadgarDaemon.stop() actually produces:
+    ``{"status": "stopped", "core": <outcome>, "backend": <outcome>}``. An earlier
+    version mocked ``{"status": "stopped", "container": ...}``, a key stop() never
+    returns, so these tests passed while every real `daemon stop` raised KeyError.
+    """
+
+    def _run_stop(self, stop_result):
         args = _args(daemon_command="stop")
         mock_d = MagicMock()
-        mock_d.stop.return_value = {"status": "stopped", "container": "yadgar-1"}
+        mock_d.stop.return_value = stop_result
         mock_cls = _mock_daemon_class(mock_d)
         with patch("yadgar.core.daemon.daemon.YadgarDaemon", mock_cls):
             cmd_daemon(args)
+
+    def test_stop_success(self, capsys):
+        self._run_stop({"status": "stopped", "core": "stopped", "backend": "stopped"})
         out = capsys.readouterr().out
-        assert "stopped" in out.lower() or "yadgar-1" in out
+        assert "Yadgar daemon stopped (core: stopped, backend: stopped)" in out
+
+    def test_stop_core_already_stopped(self, capsys):
+        self._run_stop({"status": "stopped", "core": "not_running", "backend": "stopped"})
+        out = capsys.readouterr().out
+        assert "core: not running, backend: stopped" in out
 
     def test_stop_not_running(self, capsys):
-        args = _args(daemon_command="stop")
-        mock_d = MagicMock()
-        mock_d.stop.return_value = {"status": "not_running"}
-        mock_cls = _mock_daemon_class(mock_d)
-        with patch("yadgar.core.daemon.daemon.YadgarDaemon", mock_cls):
-            cmd_daemon(args)
+        self._run_stop({"status": "stopped", "core": "not_running", "backend": "not_running"})
         out = capsys.readouterr().out
         assert "not running" in out.lower()
+
+    def test_stop_failure_exits_with_runtime_error(self, capsys):
+        with pytest.raises(SystemExit) as exc_info:
+            self._run_stop(
+                {"status": "stopped", "core": "Error: permission denied", "backend": "stopped"}
+            )
+        assert exc_info.value.code == 1
+        assert "Failed to stop core: Error: permission denied" in capsys.readouterr().err
+
+    def test_handler_consumes_real_stop_result(self, capsys, monkeypatch):
+        """Drive the real YadgarDaemon.stop() so the handler cannot drift from its shape."""
+        from yadgar.core.daemon import daemon as daemon_mod
+
+        monkeypatch.setattr(daemon_mod, "_get_runtime", lambda: "podman")
+        monkeypatch.setattr(
+            daemon_mod.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+        real = daemon_mod.YadgarDaemon()
+        real._container_exists = lambda name: name != "yadgar"  # core already gone
+        mock_cls = _mock_daemon_class(real)
+        with patch("yadgar.core.daemon.daemon.YadgarDaemon", mock_cls):
+            cmd_daemon(_args(daemon_command="stop"))
+        assert "core: not running, backend: stopped" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
